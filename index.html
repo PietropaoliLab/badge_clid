@@ -3,145 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Badge Generator - Univaq</title>
-    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+    <title>Generatore Badge Univaq</title>
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        :root { --blue: #0054a6; --red: #e31e24; }
-        body { font-family: 'Atkinson Hyperlegible', sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        h2 { color: var(--blue); text-align: center; margin-bottom: 25px; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
-        input { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        input:focus { border-color: var(--blue); outline: none; }
-        .status-box { padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 20px; text-align: center; line-height: 1.4; }
-        .waiting { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .ready { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        button { width: 100%; padding: 15px; background: var(--blue); color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        .hidden-input { display: none; }
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 { font-size: 1.2rem; text-align: center; margin-bottom: 1.5rem; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #005596;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #003d6b; }
+        canvas { display: none; } /* Nascosto, serve solo per il processing */
+        #preview {
+            margin-top: 20px;
+            width: 100%;
+            border: 1px solid #ddd;
+            display: none;
+        }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Badge CLID Univaq</h2>
-    
-    <div id="status-msg" class="status-box waiting">
-        Inizializzazione...
-    </div>
-
-    <input type="file" id="manual-upload" class="hidden-input" accept=".pdf">
-
-    <div class="input-group">
-        <label>Nome</label>
-        <input type="text" id="nome" placeholder="Mario">
-    </div>
-    <div class="input-group">
-        <label>Cognome</label>
-        <input type="text" id="cognome" placeholder="ROSSI">
-    </div>
-
-    <button id="btn-generate" disabled>GENERA PDF</button>
+<div class="container">
+    <h1>Generatore Badge Igienista</h1>
+    <input type="text" id="nome" placeholder="Nome">
+    <input type="text" id="cognome" placeholder="COGNOME">
+    <button onclick="generatePDF()">Genera PDF (4 Badge)</button>
+    <p style="font-size: 0.8rem; color: #666; text-align: center;">Il PDF sarà in formato A4 con 4 badge.</p>
 </div>
 
+<canvas id="badgeCanvas"></canvas>
+
 <script>
-    const statusBox = document.getElementById('status-msg');
-    const btn = document.getElementById('btn-generate');
-    const manualUpload = document.getElementById('manual-upload');
-    let templateBytes = null;
-
-    // Percorso relativo per GitHub Pages
-    const pdfPath = './pdf/Cartellino%20Tirocinio%20Studenti.pdf';
-
-    async function init() {
-        try {
-            const response = await fetch(pdfPath);
-            if (!response.ok) throw new Error("File PDF non raggiungibile");
-            templateBytes = await response.arrayBuffer();
-            setReady();
-        } catch (err) {
-            console.error("Errore caricamento:", err);
-            statusBox.className = "status-box error";
-            statusBox.innerHTML = "<b>Errore:</b> Template non trovato.<br>Controlla che il file sia in <code>/pdf/Cartellino Tirocinio Studenti.pdf</code><br><br><button onclick='document.getElementById(\"manual-upload\").click()' style='background:#721c24; padding:5px 10px; font-size:12px;'>Carica manualmente</button>";
+    async function generatePDF() {
+        const { jsPDF } = window.jspdf;
+        const nome = document.getElementById('nome').value.trim();
+        const cognome = document.getElementById('cognome').value.trim().toUpperCase();
+        
+        if (!nome || !cognome) {
+            alert("Inserisci sia nome che cognome");
+            return;
         }
-    }
 
-    function setReady() {
-        statusBox.className = "status-box ready";
-        statusBox.innerText = "✅ Template pronto";
-        btn.disabled = false;
-    }
-
-    manualUpload.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            templateBytes = await file.arrayBuffer();
-            setReady();
-        }
-    };
-
-    async function generate() {
-        try {
-            const nome = document.getElementById('nome').value.trim();
-            const cognome = document.getElementById('cognome').value.trim().toUpperCase();
-            if (!nome || !cognome) return alert("Dati mancanti!");
-
-            const fullName = `${nome} ${cognome}`;
+        const fullName = `${nome} ${cognome}`;
+        const canvas = document.getElementById('badgeCanvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        // Carica il template
+        img.src = 'badge_template.jpg';
+        
+        img.onload = function() {
+            // Dimensioni canvas basate sull'immagine
+            canvas.width = img.width;
+            canvas.height = img.height;
             
-            // Carica PDF
-            const pdfDoc = await PDFLib.PDFDocument.load(templateBytes);
-            pdfDoc.registerFontkit(fontkit);
+            // Disegna l'immagine di sfondo
+            ctx.drawImage(img, 0, 0);
             
-            // Font Atkinson Bold da CDN
-            const fontUrl = 'https://cdn.jsdelivr.net/gh/googlefonts/atkinson-hyperlegible@main/fonts/otf/Atkinson-Hyperlegible-Bold.otf';
-            const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
-            const customFont = await pdfDoc.embedFont(fontBytes);
+            // Impostazioni Testo
+            const fontSize = 75; // Dimensione base
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+            ctx.font = `700 ${fontSize}px 'Atkinson Hyperlegible'`;
 
-            const page = pdfDoc.getPages()[0];
+            // Controllo lunghezza e ridimensionamento (Auto-fit)
+            let currentFontSize = fontSize;
+            const maxWidth = canvas.width * 0.8; // Massimo 80% della larghezza del badge
             
-            // Coordinate (Y regolata per stare sopra "Igienista Dentale")
-            // I badge nel PDF sono 4. Coordinate X/Y in punti PDF.
-            const coords = [
-                { x: 53, y: 206.5 }, { x: 147.5, y: 206.5 }, 
-                { x: 53, y: 105.8 }, { x: 147.5, y: 105.8 }
+            while (ctx.measureText(fullName).width > maxWidth && currentFontSize > 20) {
+                currentFontSize -= 2;
+                ctx.font = `700 ${currentFontSize}px 'Atkinson Hyperlegible'`;
+            }
+
+            // Posizionamento verticale: regolalo in base al tuo template
+            // In questo template, lo spazio vuoto è sotto la linea grigia sottile
+            ctx.fillText(fullName, canvas.width / 2, canvas.height * 0.82);
+
+            // Generazione PDF
+            const badgeData = canvas.toDataURL('image/jpeg', 1.0);
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            
+            // Dimensioni standard biglietto da visita: 85x55mm
+            const bW = 85;
+            const bH = 55;
+            
+            // Coordinate per 4 badge centrati nel foglio
+            const positions = [
+                { x: 15, y: 20 },
+                { x: 110, y: 20 },
+                { x: 15, y: 80 },
+                { x: 110, y: 80 }
             ];
 
-            coords.forEach(pos => {
-                let size = 13;
-                let width = customFont.widthOfTextAtSize(fullName, size);
-                const maxWidth = 75 * 2.834; 
-
-                while (width > maxWidth && size > 6) {
-                    size -= 0.5;
-                    width = customFont.widthOfTextAtSize(fullName, size);
-                }
-
-                page.drawText(fullName, {
-                    x: (pos.x * 2.834) - (width / 2),
-                    y: pos.y * 2.834,
-                    size: size,
-                    font: customFont,
-                    color: PDFLib.rgb(0, 0, 0)
-                });
+            positions.forEach(pos => {
+                pdf.addImage(badgeData, 'JPEG', pos.x, pos.y, bW, bH);
             });
 
-            const pdfResult = await pdfDoc.save();
-            const blob = new Blob([pdfResult], { type: 'application/pdf' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `badge_${cognome}.pdf`;
-            link.click();
-        } catch (e) {
-            alert("Errore generazione: " + e.message);
-        }
-    }
+            pdf.save(`Badge_${cognome}.pdf`);
+        };
 
-    btn.onclick = generate;
-    init();
+        img.onerror = function() {
+            alert("Errore: Assicurati che 'badge_template.jpg' sia nella stessa cartella del file HTML.");
+        };
+    }
 </script>
 
 </body>
