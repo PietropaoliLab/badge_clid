@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badge Generator - Univaq</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root { --blue: #0054a6; --red: #e31e24; }
+        body { font-family: 'Atkinson Hyperlegible', sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h2 { color: var(--blue); text-align: center; margin-bottom: 25px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        input { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        input:focus { border-color: var(--blue); outline: none; }
+        .status-box { padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 20px; text-align: center; }
+        .waiting { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .ready { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        button { width: 100%; padding: 15px; background: var(--blue); color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .hidden-input { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Badge Igienisti</h2>
+    
+    <div id="status-msg" class="status-box waiting">
+        Tentativo di caricamento template...
+    </div>
+
+    <input type="file" id="manual-upload" class="hidden-input" accept=".pdf">
+
+    <div class="input-group">
+        <label>Nome</label>
+        <input type="text" id="nome" placeholder="Inserisci Nome">
+    </div>
+    <div class="input-group">
+        <label>Cognome</label>
+        <input type="text" id="cognome" placeholder="Inserisci Cognome">
+    </div>
+
+    <button id="btn-generate" disabled>GENERA PDF</button>
+</div>
+
+<script>
+    const statusBox = document.getElementById('status-msg');
+    const btn = document.getElementById('btn-generate');
+    const manualUpload = document.getElementById('manual-upload');
+    let templateBytes = null;
+
+    // 1. TENTATIVO DI CARICAMENTO AUTOMATICO
+    // Cerca il file nella cartella /pdf/ relativa alla posizione dell'html
+    const pdfPath = 'pdf/Cartellino Tirocinio Studenti.pdf';
+
+    async function autoLoadTemplate() {
+        try {
+            const response = await fetch(pdfPath);
+            if (!response.ok) throw new Error("File non trovato o blocco CORS");
+            templateBytes = await response.arrayBuffer();
+            setReady();
+        } catch (err) {
+            console.warn("Auto-load fallito:", err);
+            statusBox.className = "status-box error";
+            statusBox.innerHTML = "Impossibile caricare il PDF automaticamente.<br><a href='#' onclick='document.getElementById(\"manual-upload\").click()'>Selezionalo manualmente dalla cartella 'pdf'</a>";
+        }
+    }
+
+    function setReady() {
+        statusBox.className = "status-box ready";
+        statusBox.innerText = "✅ Template pronto per l'uso";
+        btn.disabled = false;
+    }
+
+    // Fallback manuale se sei in locale
+    manualUpload.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            templateBytes = await file.arrayBuffer();
+            setReady();
+        }
+    };
+
+    // 2. LOGICA DI GENERAZIONE
+    async function generate() {
+        const nome = document.getElementById('nome').value.trim();
+        const cognome = document.getElementById('cognome').value.trim().toUpperCase();
+        if (!nome || !cognome) return alert("Compila i campi!");
+
+        const fullName = `${nome} ${cognome}`;
+        const pdfDoc = await PDFLib.PDFDocument.load(templateBytes);
+        pdfDoc.registerFontkit(fontkit);
+        
+        // Incorporamento font Atkinson Bold
+        const fontUrl = 'https://cdn.jsdelivr.net/gh/googlefonts/atkinson-hyperlegible@main/fonts/otf/Atkinson-Hyperlegible-Bold.otf';
+        const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
+        const customFont = await pdfDoc.embedFont(fontBytes);
+
+        const page = pdfDoc.getPages()[0];
+        
+        // Coordinate Millimetriche (X: centro badge, Y: sopra dicitura igienista)
+        const coords = [
+            { x: 52.5, y: 206 }, { x: 147.5, y: 206 }, 
+            { x: 52.5, y: 105 }, { x: 147.5, y: 105 }
+        ];
+
+        coords.forEach(pos => {
+            let size = 14;
+            let width = customFont.widthOfTextAtSize(fullName, size);
+            const maxWidth = 75 * 2.834; 
+
+            while (width > maxWidth && size > 6) {
+                size -= 0.5;
+                width = customFont.widthOfTextAtSize(fullName, size);
+            }
+
+            page.drawText(fullName, {
+                x: (pos.x * 2.834) - (width / 2),
+                y: pos.y * 2.834,
+                size: size,
+                font: customFont,
+                color: PDFLib.rgb(0, 0, 0)
+            });
+        });
+
+        const pdfResult = await pdfDoc.save();
+        const blob = new Blob([pdfResult], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `badge_${cognome}.pdf`;
+        link.click();
+    }
+
+    btn.onclick = generate;
+    
+    // Avvio caricamento automatico
+    autoLoadTemplate();
+</script>
+
+</body>
+</html>
