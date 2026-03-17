@@ -7,62 +7,27 @@
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-            background-color: #f0f2f5;
-            color: #333;
-        }
-        .container {
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-width: 400px;
-            width: 100%;
-        }
-        h1 { font-size: 1.2rem; text-align: center; margin-bottom: 1.5rem; }
-        input {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 1rem;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            background-color: #005596;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        button:hover { background-color: #003d6b; }
-        canvas { display: none; } /* Nascosto, serve solo per il processing */
-        #preview {
-            margin-top: 20px;
-            width: 100%;
-            border: 1px solid #ddd;
-            display: none;
-        }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #f0f2f5; color: #333; }
+        .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
+        h1 { font-size: 1.3rem; text-align: center; color: #005596; margin-top: 0; }
+        label { font-size: 0.9rem; font-weight: bold; display: block; margin-top: 10px; }
+        input { width: 100%; padding: 12px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        button { width: 100%; padding: 14px; background-color: #005596; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        button:active { transform: scale(0.98); }
+        canvas { display: none; }
+        .footer { margin-top: 20px; font-size: 0.8rem; color: #777; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Generatore Badge Igienista</h1>
-    <input type="text" id="nome" placeholder="Nome">
-    <input type="text" id="cognome" placeholder="COGNOME">
-    <button onclick="generatePDF()">Genera PDF (4 Badge)</button>
-    <p style="font-size: 0.8rem; color: #666; text-align: center;">Il PDF sarà in formato A4 con 4 badge.</p>
+    <h1>Badge Igienista Dentale</h1>
+    <label for="nome">Nome</label>
+    <input type="text" id="nome" placeholder="es. Mario">
+    <label for="cognome">Cognome</label>
+    <input type="text" id="cognome" placeholder="es. ROSSI">
+    <button onclick="generatePDF()">SCARICA PDF STAMPABILE</button>
+    <div class="footer">Foglio A4 con 4 badge e crocini di taglio rinforzati.</div>
 </div>
 
 <canvas id="badgeCanvas"></canvas>
@@ -70,77 +35,81 @@
 <script>
     async function generatePDF() {
         const { jsPDF } = window.jspdf;
-        const nome = document.getElementById('nome').value.trim();
-        const cognome = document.getElementById('cognome').value.trim().toUpperCase();
+        const nomeInput = document.getElementById('nome').value.trim();
+        const cognomeInput = document.getElementById('cognome').value.trim().toUpperCase();
         
-        if (!nome || !cognome) {
-            alert("Inserisci sia nome che cognome");
+        if (!nomeInput || !cognomeInput) {
+            alert("Per favore, inserisci sia il nome che il cognome.");
             return;
         }
 
-        const fullName = `${nome} ${cognome}`;
         const canvas = document.getElementById('badgeCanvas');
         const ctx = canvas.getContext('2d');
         const img = new Image();
         
-        // Carica il template
-        img.src = 'badge_template.jpg';
+        img.crossOrigin = "anonymous"; 
+        img.src = 'badge_template.jpg'; 
         
-        img.onload = function() {
-            // Dimensioni canvas basate sull'immagine
+        img.onload = async function() {
             canvas.width = img.width;
             canvas.height = img.height;
-            
-            // Disegna l'immagine di sfondo
             ctx.drawImage(img, 0, 0);
             
-            // Impostazioni Testo
-            const fontSize = 75; // Dimensione base
+            await document.fonts.load("700 75px 'Atkinson Hyperlegible'");
+            
+            const fullName = `${nomeInput} ${cognomeInput}`;
+            let fontSize = 75; 
             ctx.fillStyle = "black";
             ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
             ctx.font = `700 ${fontSize}px 'Atkinson Hyperlegible'`;
 
-            // Controllo lunghezza e ridimensionamento (Auto-fit)
-            let currentFontSize = fontSize;
-            const maxWidth = canvas.width * 0.8; // Massimo 80% della larghezza del badge
-            
-            while (ctx.measureText(fullName).width > maxWidth && currentFontSize > 20) {
-                currentFontSize -= 2;
-                ctx.font = `700 ${currentFontSize}px 'Atkinson Hyperlegible'`;
+            const maxWidth = canvas.width * 0.85;
+            while (ctx.measureText(fullName).width > maxWidth && fontSize > 20) {
+                fontSize -= 2;
+                ctx.font = `700 ${fontSize}px 'Atkinson Hyperlegible'`;
             }
 
-            // Posizionamento verticale: regolalo in base al tuo template
-            // In questo template, lo spazio vuoto è sotto la linea grigia sottile
-            ctx.fillText(fullName, canvas.width / 2, canvas.height * 0.82);
+            // POSIZIONAMENTO: Impostato al 56% (via di mezzo definitiva)
+            ctx.fillText(fullName, canvas.width / 2, canvas.height * 0.56);
 
-            // Generazione PDF
             const badgeData = canvas.toDataURL('image/jpeg', 1.0);
             const pdf = new jsPDF('p', 'mm', 'a4');
             
-            // Dimensioni standard biglietto da visita: 85x55mm
-            const bW = 85;
-            const bH = 55;
+            const bW = 85; 
+            const bH = 55; 
             
-            // Coordinate per 4 badge centrati nel foglio
             const positions = [
-                { x: 15, y: 20 },
-                { x: 110, y: 20 },
-                { x: 15, y: 80 },
-                { x: 110, y: 80 }
+                { x: 15, y: 20 }, { x: 110, y: 20 },
+                { x: 15, y: 85 }, { x: 110, y: 85 }
             ];
 
             positions.forEach(pos => {
                 pdf.addImage(badgeData, 'JPEG', pos.x, pos.y, bW, bH);
+                
+                pdf.setDrawColor(100, 100, 100); 
+                pdf.setLineWidth(0.3); 
+                
+                const s = 4; 
+                const offset = 1; 
+                
+                pdf.line(pos.x - offset, pos.y, pos.x - s, pos.y);
+                pdf.line(pos.x, pos.y - offset, pos.x, pos.y - s);
+                pdf.line(pos.x + bW + offset, pos.y, pos.x + bW + s, pos.y);
+                pdf.line(pos.x + bW, pos.y - offset, pos.x + bW, pos.y - s);
+                pdf.line(pos.x - offset, pos.y + bH, pos.x - s, pos.y + bH);
+                pdf.line(pos.x, pos.y + bH + offset, pos.x, pos.y + bH + s);
+                pdf.line(pos.x + bW + offset, pos.y + bH, pos.x + bW + s, pos.y + bH);
+                pdf.line(pos.x + bW, pos.y + bH + offset, pos.x + bW, pos.y + bH + s);
             });
 
-            pdf.save(`Badge_${cognome}.pdf`);
+            pdf.save(`Badge_${cognomeInput}.pdf`);
         };
 
         img.onerror = function() {
-            alert("Errore: Assicurati che 'badge_template.jpg' sia nella stessa cartella del file HTML.");
+            alert("Errore caricamento template. Controlla che il file badge_template.jpg sia presente.");
         };
     }
 </script>
-
 </body>
 </html>
